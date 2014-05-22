@@ -1,41 +1,56 @@
 int margin = 50;
-int nodeRadius = 10;
+int nodeRadius = 20;
 double scaleY = 150;
-int frame_rate = 25;
+int frame_rate = 50;
 
 Tree tree;
 double theta = 1.0;
 
-double dt = 1e-2;
+double dt = 0.02;
+
+boolean paused = false;
 
 void setup() {
-  size(800, 600);
+  size(640, 480);
   frameRate(frame_rate);
 
-  stroke(#000000);
-  fill(#ff0000);
+  strokeWeight(4);
+  stroke(#ffffff);
+  fill(#0000ff);
 
-  Node leaf1 = new Node().setAge(0);
-  Node leaf2 = new Node().setAge(1);
-  Node leaf3 = new Node().setAge(2);
+  //  Node leaf1 = new Node().setAge(0);
+  //  Node leaf2 = new Node().setAge(1);
+  //  Node leaf3 = new Node().setAge(2);
+  //
+  //  Node internal = new Node().setAge(3);
+  //  internal.addChild(leaf1).addChild(leaf2);
+  //  Node root = new Node().setAge(3.5);
+  //  root.addChild(internal).addChild(leaf3);
+  //
+  //  tree = new Tree(root);
 
-  Node internal = new Node().setAge(3);
-  internal.addChild(leaf1).addChild(leaf2);
-  Node root = new Node().setAge(3.2);
-  root.addChild(internal).addChild(leaf3);
-
-  tree = new Tree(root);
+  double[] leafAges = {0, 0.1, 0.2, 0.3, 0.4, 0.5};
+  tree = new Tree(leafAges, 2.0);
 }
 
 void draw() {
-  tree.doStep();
-  background(#ffffff);
+  if (!paused)
+    tree.doStep();
+  background(#000000);
   drawTree();
 }
 
-//void keyPressed() {
-//  tree.doStep();
-//}
+void keyPressed() {
+  paused = !paused;
+}
+
+void mouseScrolled() {
+  if (mouseScroll>0) {
+    scaleY *= 1.1;
+  } else {
+    scaleY /= 1.1;
+  }
+}
 
 void drawTree() {      
 
@@ -80,7 +95,7 @@ class Node {
     child.parent = this;
     return this;
   }
-  
+
   Node setParent(Node parent) {
     this.parent = parent;
     return this;
@@ -197,6 +212,7 @@ class Tree {
 
   double[] Q, P;
 
+  // Create new tree with provided node as root.
   Tree(Node root) {
     this.root = root;
     childList = root.getChildList();
@@ -205,9 +221,73 @@ class Tree {
     for (int i=0; i<childList.size (); i++) {
       childList.get(i).layoutPosition = i;
     }
-    
+
     Q = new double[nodeList.size()];
     P = new double[nodeList.size()];
+  }
+
+  // Simulate a new coalescent tree with these leaf ages.
+  Tree(double[] leafAges, double simTheta) {
+    ArrayList<Node> inactiveNodes = new ArrayList<Node>();
+    ArrayList<Node> activeNodes = new ArrayList<Node>();
+    for (double age : leafAges) {
+      inactiveNodes.add(new Node().setAge(age));
+    }
+
+    sortNodeList(inactiveNodes);
+
+    double t = 0.0;
+    while (activeNodes.size ()>1 || !inactiveNodes.isEmpty()) {
+
+      int k = activeNodes.size();
+
+      double propensity = 0.5*k*(k-1)/simTheta;
+
+      boolean tIsInfinite = false;
+      if (propensity > 0) {
+        t += -log(random(1))/propensity;
+      } else {
+        tIsInfinite = true; // Hack to get around processing.js limitation
+      }
+
+      if (!inactiveNodes.isEmpty() && (t>inactiveNodes.get(0).getAge() || tIsInfinite)) {
+        t = inactiveNodes.get(0).getAge();
+        activeNodes.add(inactiveNodes.get(0));
+        inactiveNodes.remove(0);
+        continue;
+      }
+
+      // Select a pair of activeNodes to coalesce
+      int idx1 = int(random(k));
+      int idx2;
+      do {
+        idx2 = int(random(k));
+      } 
+      while (idx2 == idx1);
+
+      Node node1 = activeNodes.get(idx1);
+      Node node2 = activeNodes.get(idx2);
+
+      Node newNode = new Node().setAge(t).addChild(node1).addChild(node2);
+      activeNodes.remove(node1);
+      activeNodes.remove(node2);
+      activeNodes.add(newNode);
+    }
+
+    this.root = activeNodes.get(0);
+    childList = root.getChildList();
+    nodeList = root.getNodeList();
+
+    for (int i=0; i<childList.size (); i++) {
+      childList.get(i).layoutPosition = i;
+    }
+
+    Q = new double[nodeList.size()];
+    P = new double[nodeList.size()];
+  }
+
+  void setRoot(Node root) {
+    this.root = root;
   }
 
   ArrayList<Node> getChildList() {
@@ -230,7 +310,7 @@ class Tree {
     return nodeList.size();
   }
 
-  void sortNodeList() {
+  void sortNodeList(ArrayList<Node> nodeList) {
     boolean sorted;
     do {
       sorted = true;
@@ -253,32 +333,32 @@ class Tree {
         k -= 1;
       node.setLineages(k);
     }
-  }
-  
+  }  
+
   void getQandP(double[] Q, double[] P) {
-    sortNodeList();
-    for (int i=0; i<nodeList.size(); i++) {
+    sortNodeList(nodeList);
+    for (int i=0; i<nodeList.size (); i++) {
       Q[i] = nodeList.get(i).getAge();
       P[i] = nodeList.get(i).getMomentum();
     }
   }
-  
+
   void setQandP(double[] Q, double[] P) {
-    for (int i=0; i<nodeList.size(); i++) {
+    for (int i=0; i<nodeList.size (); i++) {
       nodeList.get(i).setAge(Q[i]);
       nodeList.get(i).setMomentum(P[i]);
     }
   }
-  
+
   void getQdotAndPdot(double[] Q, double[] P, double[] Qdot, double[] Pdot) {
-    for (int i=0; i<nodeList.size(); i++) {
+    for (int i=0; i<nodeList.size (); i++) {
       if (nodeList.get(i).isLeaf()) {
         Qdot[i] = 0.0;
         Pdot[i] = 0.0;
         P[i] = 0.0;
         continue;
       } 
-      
+
       int ki = nodeList.get(i).getLineages();
       int kiminus1 = nodeList.get(i-1).getLineages();
       Qdot[i] = P[i];
@@ -290,7 +370,7 @@ class Tree {
 
     double logP = 0.0;
 
-    sortNodeList();
+    sortNodeList(nodeList);
     ArrayList<Node> sorted = getNodeList();
 
     for (int i=0; i<sorted.size ()-1; i++) {
@@ -301,37 +381,38 @@ class Tree {
 
     return logP;
   }
-  
+
   void doStep() {
-    
+
     double[] Q = new double[nodeList.size()];
     double[] P = new double[nodeList.size()];
     double[] Qdot = new double[nodeList.size()];
     double[] Pdot = new double[nodeList.size()];
-    
+
     getQandP(Q, P);
-    getQdotAndPdot(Q,P,Qdot,Pdot);
-    
-    for (int i=0; i<nodeList.size(); i++) {
-      print(Qdot[i] + " ");
+    getQdotAndPdot(Q, P, Qdot, Pdot);
+
+    for (int i=0; i<nodeList.size (); i++) {
+      //print(Qdot[i] + " ");
       Q[i] = Q[i] + dt*Qdot[i];
       P[i] = P[i] + dt*Pdot[i];
     }
-    println();
-    
+    //println();
+
     setQandP(Q, P);
-    
+
     updateTopology();
   }
-  
+
+  // What to do when interval sizes become negative
   void updateTopology() {
-    
+
     for (Node node : nodeList) {
       if (node.isRoot())
         continue;
-      
+
       Node parent = node.getParent();
-      
+
       if (parent.getAge()<node.getAge()) {
         double delta = node.getAge()-parent.getAge();
         if (node.isLeaf()) {
@@ -340,22 +421,23 @@ class Tree {
         } else {
           int idx = int(random(2));
           Node child = node.getChildren().get(idx);
-          
+
           if (!parent.isRoot()) {
             Node grandParent = parent.getParent();
             grandParent.getChildren().remove(parent);
             grandParent.addChild(node);
           }
-          
+
           parent.getChildren().remove(node);
           node.getChildren().remove(child);
           node.addChild(parent);
           parent.addChild(child);
+
+          if (node.isRoot())
+            setRoot(node);
         }
       }
     }
-    
   }
-
 }
 
