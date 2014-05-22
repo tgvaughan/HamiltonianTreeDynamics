@@ -5,32 +5,24 @@ int frame_rate = 50;
 
 Tree tree;
 double theta = 1.0;
+int nLeaves = 5;
 
 double dt = 0.02;
 
 boolean paused = false;
 
 void setup() {
-  size(640, 480);
+  size(800, 600);
   frameRate(frame_rate);
 
   strokeWeight(4);
   stroke(#ffffff);
   fill(#0000ff);
 
-  //  Node leaf1 = new Node().setAge(0);
-  //  Node leaf2 = new Node().setAge(1);
-  //  Node leaf3 = new Node().setAge(2);
-  //
-  //  Node internal = new Node().setAge(3);
-  //  internal.addChild(leaf1).addChild(leaf2);
-  //  Node root = new Node().setAge(3.5);
-  //  root.addChild(internal).addChild(leaf3);
-  //
-  //  tree = new Tree(root);
-
-  double[] leafAges = {0, 0.1, 0.2, 0.3, 0.4, 0.5};
-  tree = new Tree(leafAges, 2.0);
+  double[] leafAges = new double[nLeaves];
+  for (int i=0; i<leafAges.length; i++)
+    leafAges[i] = 0.1*i;
+  tree = new Tree(leafAges, 1.0);
 }
 
 void draw() {
@@ -41,7 +33,24 @@ void draw() {
 }
 
 void keyPressed() {
-  paused = !paused;
+  switch(key) {
+    case ' ':
+      paused = !paused;
+      break;
+    case 'r':
+      setup();
+      break;
+    case '+':
+      nLeaves += 1;
+      setup();
+      break;
+    case '-':
+      nLeaves = max(nLeaves-1, 3);
+      setup();
+      break;
+    default:
+      break;
+  }
 }
 
 void mouseScrolled() {
@@ -393,11 +402,9 @@ class Tree {
     getQdotAndPdot(Q, P, Qdot, Pdot);
 
     for (int i=0; i<nodeList.size (); i++) {
-      //print(Qdot[i] + " ");
       Q[i] = Q[i] + dt*Qdot[i];
       P[i] = P[i] + dt*Pdot[i];
     }
-    //println();
 
     setQandP(Q, P);
 
@@ -407,34 +414,35 @@ class Tree {
   // What to do when interval sizes become negative
   void updateTopology() {
 
-    for (Node node : nodeList) {
-      if (node.isRoot())
+    for (Node nodeA : nodeList) {
+      if (nodeA.isRoot())
         continue;
 
-      Node parent = node.getParent();
+      Node nodeB = nodeA.getParent();
 
-      if (parent.getAge()<node.getAge()) {
-        double delta = node.getAge()-parent.getAge();
-        if (node.isLeaf()) {
-          parent.setAge(node.getAge()+delta); // reflection
-          parent.setMomentum(-parent.getMomentum());
+      if (nodeB.getAge()<nodeA.getAge()) {
+        double delta = nodeA.getAge()-nodeB.getAge();
+        if (nodeA.isLeaf()) {
+          nodeB.setAge(nodeA.getAge()+delta); // reflection
+          nodeB.setMomentum(-nodeB.getMomentum());
         } else {
           int idx = int(random(2));
-          Node child = node.getChildren().get(idx);
+          Node nodeC = nodeA.getChildren().get(idx);
 
-          if (!parent.isRoot()) {
-            Node grandParent = parent.getParent();
-            grandParent.getChildren().remove(parent);
-            grandParent.addChild(node);
+          if (!nodeB.isRoot()) {
+            Node nodeD = nodeB.getParent();
+            nodeD.getChildren().remove(nodeB);
+            nodeD.addChild(nodeA);
+          } else {
+            nodeA.setParent(null);
+            setRoot(nodeA);
           }
 
-          parent.getChildren().remove(node);
-          node.getChildren().remove(child);
-          node.addChild(parent);
-          parent.addChild(child);
-
-          if (node.isRoot())
-            setRoot(node);
+          nodeB.getChildren().remove(nodeA);
+          nodeA.getChildren().remove(nodeC);
+          nodeA.addChild(nodeB);
+          nodeB.addChild(nodeC);
+          
         }
       }
     }
