@@ -21,7 +21,7 @@ void setup() {
 
   double[] leafAges = new double[nLeaves];
   for (int i=0; i<leafAges.length; i++)
-    leafAges[i] = 0.1*i;
+    leafAges[i] = 0.2*i;
   tree = new Tree(leafAges, 1.0);
 }
 
@@ -392,6 +392,12 @@ class Tree {
   }
 
   void doStep() {
+    //doStepEuler();
+    doStepLeapFrog();   
+    updateTopology();
+  }
+
+  void doStepEuler() {
 
     double[] Q = new double[nodeList.size()];
     double[] P = new double[nodeList.size()];
@@ -407,8 +413,30 @@ class Tree {
     }
 
     setQandP(Q, P);
+  }
+  
+  void doStepLeapFrog() {
+    double[] Q = new double[nodeList.size()];
+    double[] P = new double[nodeList.size()];
+    double[] Pprime = new double[nodeList.size()];
+    double[] Qdot = new double[nodeList.size()];
+    double[] Pdot = new double[nodeList.size()];
 
-    updateTopology();
+    getQandP(Q, P);
+    getQdotAndPdot(Q, P, Qdot, Pdot);
+
+    for (int i=0; i<nodeList.size(); i++) {
+      Pprime[i] = P[i] + 0.5*dt*Pdot[i];
+      Q[i] = Q[i] + dt*Pprime[i];
+    }
+    
+    getQdotAndPdot(Q, Pprime, Qdot, Pdot);
+    
+    for (int i=0; i<nodeList.size(); i++) {
+      P[i] = Pprime[i] + 0.5*dt*Pdot[i];
+    }
+
+    setQandP(Q, P);
   }
 
   // What to do when interval sizes become negative
